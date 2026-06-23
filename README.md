@@ -12,9 +12,9 @@
 
 ## The idea
 
-Sequencing a DNA molecule gives you several noisy copies (reads), not one. Reconstructing the true sequence from them is a consensus problem — common in genomics, metagenomics, and DNA data storage. The standard method is per-position majority voting across the aligned reads.
+Sequencing a DNA molecule gives you several noisy copies (reads) of it. Reconstructing the true sequence from them is a consensus problem, common in genomics, metagenomics, and DNA data storage. The standard method is per-position majority voting across the aligned reads.
 
-Majority voting decides each position independently, ignoring the rest of the sequence. But DNA isn't a random string: native and metagenomic sequences have strong structure (k-mer statistics, motifs, codon bias), and engineered DNA carries code constraints. The optimal decoder (MAP) combines the read evidence with a prior over likely sequences.
+Majority voting decides each position independently. DNA sequences have strong structure — k-mer statistics, motifs, codon bias, and code constraints in engineered DNA. The optimal decoder (MAP) combines the read evidence with a prior over likely sequences, so it can use that structure.
 
 A small Transformer learns that prior and beats majority voting, and the gap widens as the error rate rises.
 
@@ -35,7 +35,7 @@ Symbol-error-rate (lower is better) on held-out strands. Markov source (`stay=0.
 
 Majority vote is the right baseline here — for substitution noise with aligned reads it's near-optimal. At `p = 0.05` the channel is easy and the two tie; as the error rate rises the learned prior pulls the neural decoder ahead: ~14% lower symbol-error-rate at `p = 0.35`, and higher exact-strand recovery throughout.
 
-BMA's numbers look bad because it's built for insertions/deletions, not substitutions: it holds back reads that disagree, assuming they're frame-shifted, so a single flipped base desyncs a read for the rest of the strand. It's not a fair baseline on this channel — it's included because it's the classic indel-aware method (see [Limitations](#limitations)).
+BMA is the classic indel-aware method. It holds back reads that disagree, treating them as frame-shifted; on a substitution channel a single flipped base then desyncs a read for the rest of the strand, which is why its error rate here is high. Majority vote is the baseline for this channel (see [Limitations](#limitations)).
 
 ## Architecture
 
@@ -132,11 +132,11 @@ All data generation is seeded; CI runs the tests and the quick experiment on eve
 The channel is synthetic and idealized:
 
 - Errors are i.i.d. and symmetric. Real sequencing errors are context-dependent (homopolymers, GC content, position in read) and asymmetric.
-- Substitution-only, so reads stay aligned (Illumina-like). No indels — this doesn't model nanopore. The IDS channel is in the code but the model isn't extended to it.
-- The high end of the noise sweep is unrealistic. Real per-base error rates are ~0.1–2%; rates up to 0.35 just spread the methods apart on the plot. Near realistic rates the methods are close.
-- The Markov source models structured DNA, which fits native and metagenomic sequences. Stored data is usually encoded to be near-random, where the prior — and the neural advantage — shrinks.
+- Substitution channel only; reads stay aligned (Illumina-like). Indels are out of scope — the IDS channel exists in the code, the model handles substitutions.
+- Realistic per-base error rates are ~0.1–2%. The sweep runs up to 0.35 to spread the methods apart on the plot; near realistic rates they are close.
+- The Markov source models structured DNA, which fits native and metagenomic sequences. Stored payload data is usually encoded to be near-random, where the prior — and the neural advantage — shrinks.
 - `K = 3` reads is low coverage.
-- BMA targets indels, so its numbers here aren't a fair comparison; majority vote is the right baseline for this channel.
+- BMA targets indels; majority vote is the baseline for this channel.
 
 ## Future work
 
