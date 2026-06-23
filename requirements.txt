@@ -1,0 +1,7 @@
+# Core dependencies. PyTorch CPU wheels are sufficient — no GPU required.
+torch>=2.0
+numpy>=1.24
+matplotlib>=3.7
+
+# Dev / test
+pytest>=7.0
