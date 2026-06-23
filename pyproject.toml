@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "neural-dna-decoder"
 version = "0.1.0"
-description = "A seq2seq Transformer that reconstructs DNA-storage strands from noisy reads, benchmarked against classical consensus and Reed-Solomon decoding."
+description = "Neural consensus for noisy DNA sequencing reads: a Transformer that learns sequence structure to denoise multiple reads better than majority voting. Includes classical baselines and a Reed-Solomon codec."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "Fikrat Talibli", email = "fikrattalibli@gmail.com" }]
-keywords = ["dna-storage", "trace-reconstruction", "transformer", "reed-solomon", "error-correction", "deep-learning"]
+keywords = ["dna-sequencing", "consensus", "read-denoising", "transformer", "reed-solomon", "error-correction", "deep-learning", "metagenomics", "dna-storage"]
 dependencies = ["torch>=2.0", "numpy>=1.24", "matplotlib>=3.7"]
 
 [project.optional-dependencies]

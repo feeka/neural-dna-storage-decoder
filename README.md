@@ -1,6 +1,6 @@
 # neural-dna-decoder
 
-**A Transformer that denoises DNA-storage reads by *learning the source prior* — performing MAP-style decoding that beats classical majority-vote consensus, with the margin growing as the channel gets noisier.**
+**Neural consensus for noisy DNA sequencing reads: a Transformer that learns the underlying sequence structure to denoise multiple error-prone reads more accurately than classical majority voting — with the margin growing as the reads get noisier.**
 
 [![CI](https://github.com/REPLACE_ME/neural-dna-decoder/actions/workflows/ci.yml/badge.svg)](https://github.com/REPLACE_ME/neural-dna-decoder/actions)
 ![python](https://img.shields.io/badge/python-3.9%2B-blue)
@@ -12,19 +12,19 @@
 
 ## The idea
 
-DNA is a dense, durable medium for archival storage: bits are encoded into the four nucleotides `A/C/G/T`, synthesized, and read back by sequencing. Reading is noisy and redundant — you observe several corrupted **reads** of each original strand and must reconstruct it.
+When DNA is sequenced you don't read a molecule once — you get **several noisy copies (reads)** of it, each with errors. Recovering the true sequence from those reads is a **consensus / read-polishing** problem that shows up across genomics and metagenomics (and in DNA data storage). The everyday tool is **symbol-wise majority voting** across the aligned reads.
 
-The classical fix is **symbol-wise majority voting** across the aligned reads. But majority voting is *source-agnostic*: it treats every position independently and ignores the fact that real encoded DNA is **not** a uniform random string — it has structure (constrained codes, biological motifs, correlations). The information-theoretically optimal decoder is **MAP**: combine the channel evidence (the reads) **with the source prior**.
+But majority voting is **source-agnostic**: it treats every position independently and ignores a fact biologists know well — real DNA is **not** a uniform random string. Native and metagenomic sequences are highly structured (k-mer statistics, motifs, codon bias), and even engineered DNA carries code constraints. The information-theoretically optimal decoder is **MAP**: combine the read evidence **with a prior over likely sequences**.
 
-This project shows that a small **Transformer learns exactly that prior** and uses it to beat majority voting — and that the advantage **grows with the noise level**, precisely because the prior matters more when the reads are less reliable.
+This project shows that a small **Transformer learns that sequence prior** and uses it to beat majority voting — and that the advantage **grows with the error rate**, precisely because the prior matters more when the reads are less reliable.
 
-To make the comparison crisp, the source is an **order-1 Markov chain** over `ACGT` (a tunable, low-entropy prior) and the channel is **substitution noise** (reads stay aligned to the original). The repo also includes the general **insertion/deletion/substitution (IDS)** channel, an indel-aware baseline (BMA), and a **Reed–Solomon** outer code, for the broader DNA-storage picture.
+As a tractable, controllable stand-in for "structured DNA," the source here is an **order-1 Markov chain** over `ACGT` and the channel is **substitution noise** (so reads stay position-aligned — the short-read / Illumina-like regime). This is a deliberately simplified model, not a calibrated simulator — see [Modeling assumptions & limitations](#modeling-assumptions--limitations). The repo also ships the general **insertion/deletion/substitution (IDS)** channel, an indel-aware baseline (BMA), and a **Reed–Solomon** outer code, which connect the same machinery to DNA data storage.
 
 ## Results
 
 ![Symbol-error-rate vs substitution rate](docs/ser_vs_noise.png)
 
-Symbol-error-rate (lower is better) on held-out strands. Markov source (`stay=0.75`), length 24, **only 3 reads** per strand; one model trained on the mixed noise range in **~8 minutes on a laptop CPU**:
+Symbol-error-rate (lower is better) on held-out strands. Markov source (`stay=0.75`), length 24, **only 3 reads** per strand (a deliberately low-coverage regime); one model trained on the mixed noise range in **~8 minutes on a laptop CPU**:
 
 | Substitution rate | **Neural (this work)** | Majority vote | BMA |
 | --- | ---: | ---: | ---: |
@@ -33,7 +33,9 @@ Symbol-error-rate (lower is better) on held-out strands. Markov source (`stay=0.
 | 0.25 | **10.90%** | 12.86% | 46.01% |
 | 0.35 | **19.01%** | 22.12% | 52.94% |
 
-At `p = 0.05` the channel is easy and majority voting is already near-optimal, so the two tie. As the substitution rate climbs, the neural decoder's learned prior lets it pull steadily ahead — a **~14% relative error reduction** over majority voting at `p = 0.35`, and consistently higher exact-strand recovery. (BMA is the indel-oriented baseline, shown applied to the substitution channel for reference; it is meant for the harder insertion/deletion regime.)
+**Majority vote is the like-for-like baseline** here: for substitution noise with position-aligned reads it is near-optimal, and it's the bar the neural decoder has to clear honestly. At `p = 0.05` the channel is easy and the two tie; as the error rate climbs, the learned prior lets the neural decoder pull steadily ahead — a **~14% relative error reduction** at `p = 0.35`, with consistently higher exact-strand recovery.
+
+> **BMA is *not* a fair baseline for this channel** and is shown only for reference. Bitwise Majority Alignment is built for **insertions/deletions**: it holds back reads that disagree, assuming they are frame-shifted. On a substitution channel that assumption is wrong, so a single flipped base desynchronizes a read for the rest of the strand — which is why its error rate is so high. It belongs to the IDS regime, not this one (see [limitations](#modeling-assumptions--limitations)).
 
 ## Architecture
 
@@ -125,20 +127,31 @@ dnadecoder experiment --quick   # end-to-end smoke run
 
 All data generation is seeded; CI runs the tests and the quick experiment on every push.
 
-## Limitations & future work
+## Modeling assumptions & limitations
 
-- **Synthetic channel.** The error model is i.i.d.; real sequencing profiles are context- and technology-dependent. Plugging in an empirical error/source model is a natural extension.
-- **Indels.** The neural benchmark targets the (aligned) substitution channel; extending the learned decoder to the full IDS channel — e.g. with a learned alignment or a CTC/transducer head — is open. BMA is included as the classical indel-aware reference.
-- **Outer code integration.** Reed–Solomon is implemented and demonstrated standalone; an end-to-end `bits → RS → DNA → channel → neural decode → RS → bits` pipeline is future work.
-- **Scale.** Strand length, read count, and model size are kept small for CPU-friendliness; the same code scales up on a GPU.
+This is a **demonstration of a principle on a simplified, synthetic channel**, not a calibrated model of any specific sequencing platform. Being explicit about what is idealized:
+
+- **The channel is simplified.** Errors are independent, memoryless, and symmetric. Real sequencing errors are **context-dependent** (homopolymer runs, GC content, position-in-read) and **asymmetric** (some base confusions are more likely than others). A more faithful model would use an empirical, base- and context-dependent error profile.
+- **Substitution-only (Illumina-like).** The neural benchmark uses a substitution channel, so reads stay aligned. This is a fair approximation for short-read, substitution-dominated data but **not** for indel-heavy technologies like nanopore. The general IDS channel is included in the code but the learned decoder is not yet extended to it.
+- **The noise sweep is a stress test, not realistic rates.** Real per-base error rates are roughly **0.1–2%**; the high end of the sweep (up to `p = 0.35`) is far beyond that and exists only to separate the methods visually. Around realistic rates the methods are close (see the leftmost point).
+- **The Markov source is a stand-in for sequence structure.** Native/metagenomic DNA really is highly structured, so a learnable prior is realistic *there*. But arbitrary **stored payload data** is deliberately encoded to look near-uniform, so in a pure data-storage setting the prior — and hence the neural advantage — would be smaller. This project targets the **structured-source** regime (e.g. sequencing native DNA).
+- **Low coverage.** Only `K = 3` reads per strand; many real pipelines have substantially higher coverage.
+- **Baselines.** Majority vote is the like-for-like baseline; BMA is shown out of its regime (it targets indels) and should not be read as a fair comparison on this channel.
+
+### Future work
+- Swap in an **empirical / context-dependent error model** and realistic error rates.
+- Extend the learned decoder to the **full IDS channel** (learned alignment, or a CTC / transducer head) so it handles insertions and deletions.
+- Wire up an end-to-end **`bits → Reed–Solomon → DNA → channel → neural decode → RS → bits`** storage pipeline.
+- **Scale** strand length, coverage, and model size on a GPU (the code is unchanged, just larger configs).
 
 ## Selected references
 
-- G. M. Church, Y. Gao, S. Kosuri. *Next-Generation Digital Information Storage in DNA.* Science, 2012.
-- N. Goldman et al. *Towards practical, high-capacity, low-maintenance information storage in synthesized DNA.* Nature, 2013.
+- R. Vaser, I. Sović, N. Nagarajan, M. Šikić. *Fast and accurate de novo genome assembly from long uncorrected reads (Racon).* Genome Research, 2017. (consensus / read polishing)
+- R. R. Wick, L. M. Judd, K. E. Holt. *Performance of neural network basecalling tools for Oxford Nanopore sequencing.* Genome Biology, 2019. (neural sequence decoding)
 - R. Heckel, G. Mikutis, R. N. Grass. *A characterization of the DNA data storage channel.* Scientific Reports, 2019.
 - T. Batu, S. Kannan, S. Khanna, A. McGregor. *Reconstructing strings from random traces.* SODA, 2004. (Bitwise Majority Alignment)
-- I. S. Reed, G. Solomon. *Polynomial codes over certain finite fields.* J. SIAM, 1960.
+- I. S. Reed, G. Solomon. *Polynomial codes over certain finite fields.* J. SIAM, 1960. (Reed–Solomon)
+- G. M. Church, Y. Gao, S. Kosuri. *Next-Generation Digital Information Storage in DNA.* Science, 2012. (related application: DNA data storage)
 
 ## License
 

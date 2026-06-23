@@ -135,7 +135,8 @@ def _add_channel_flags(p: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="dnadecoder", description="Neural DNA-storage read decoder CLI."
+        prog="dnadecoder",
+        description="Neural consensus decoder for noisy DNA sequencing reads.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

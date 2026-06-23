@@ -1,5 +1,8 @@
-"""neural-dna-decoder: a non-autoregressive Transformer that denoises DNA-storage
-reads, performing learned MAP decoding that beats classical consensus baselines.
+"""neural-dna-decoder: neural consensus for noisy DNA sequencing reads.
+
+A non-autoregressive Transformer that learns the source sequence structure and
+performs MAP-style decoding over several error-prone reads, beating classical
+majority-vote consensus — especially as the error rate rises.
 """
 from __future__ import annotations
 
